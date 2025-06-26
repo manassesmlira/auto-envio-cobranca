@@ -1,5 +1,5 @@
 
-# Quita Notion - Automação Financeira
+# Auto Envio Cobrança - Automação Financeira
 ## 📌 Módulos Principais
 ### 1. Integração Cora-Notion
 #### Javascript
