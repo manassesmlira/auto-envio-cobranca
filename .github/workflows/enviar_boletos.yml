@@ -1,0 +1,63 @@
+name: Enviar boletos do dia
+on:
+  schedule:
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    env:
+      API_SECRET_INDEX: ${{ secrets.API_SECRET_INDEX }}
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+      WASCRIPT_TOKEN: ${{ secrets.WASCRIPT_TOKEN }}
+      CORA_API_BASE_URL: ${{ secrets.CORA_API_BASE_URL }}
+      CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+      CERT_FOLDER_PATH: cert_key_cora_production_2025_04_29
+      WHASCALE_API_URL: ${{ secrets.WHASCALE_API_URL }}
+      AUTOMATOR_WEBHOOK_URL: ${{ secrets.AUTOMATOR_WEBHOOK_URL }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+      PRIVATE_KEY_PASSPHRASE: ${{ secrets.PRIVATE_KEY_PASSPHRASE }}
+    steps:
+      - name: Chamar API - Primeira vez
+        run: |
+          echo "🔔 Primeira chamada: $(date)"
+          curl -v -X POST "https://quita-notion.onrender.com/processar-lembretes" \
+            -H "x-api-key: $API_SECRET_INDEX"
+
+      - name: Aguarda 10 minutos para verificar se processamento foi executado
+        run: |
+          echo "⏳ Esperando 10 minutos para verificar se processamento foi executado..."
+          sleep 1200
+
+      - name: Verificar se processamento foi executado
+        id: check_processing
+        run: |
+          echo "🔍 Verificando se processamento foi executado..."
+          
+          response=$(curl -s -H "x-api-key: $API_SECRET_INDEX" \
+            https://quita-notion.onrender.com/status/last-processing)
+          
+          echo "Response: $response"
+          
+          processing_executed=$(echo "$response" | jq -r '.processing_executed_recently // false')
+          
+          if [ "$processing_executed" = "true" ]; then
+            echo "✅ Processamento foi executado com sucesso. Segunda chamada não necessária."
+            echo "should_retry=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Processamento não foi executado. Executando segunda chamada..."
+            echo "should_retry=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Chamar API - Segunda vez
+        if: steps.check_processing.outputs.should_retry == 'true'
+        run: |
+          echo "🔔 Segunda chamada: $(date)"
+          curl -v -X POST "https://quita-notion.onrender.com/processar-lembretes" \
+            -H "x-api-key: $API_SECRET_INDEX"
